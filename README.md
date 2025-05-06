@@ -110,6 +110,11 @@ A modern Next.js app with thirdweb wallet authentication and Supabase session ma
 
 ---
 
+## Usage
+![Demo](public/demo.gif)
+
+---
+
 ## 🧑‍💻 Contributing
 
 PRs and issues welcome!
