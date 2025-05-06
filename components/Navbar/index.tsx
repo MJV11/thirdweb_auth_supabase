@@ -1,5 +1,4 @@
-"use client"; // necessary for client side operations
-
+"use client"; 
 import { useState, useEffect } from "react";
 import { ConnectWallet, useWallet, useConnectionStatus } from "@thirdweb-dev/react";
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
@@ -39,82 +38,82 @@ export function Navbar() {
         setSupabaseUserId(null);
       }
     };
+
+    /**
+     * Handles authentication with Supabase
+     * @param address - The wallet address to authenticate with
+     */
+    const handleAuth = async (address: string) => {
+      if (isAuthenticating) return; // prevent multiple calls
+      setIsAuthenticating(true);
+      toast.loading("Authenticating...", { id: "auth" });
+      
+      try {      
+        // 1. Generate login payload from your backend
+        const payloadRes = await fetch("/api/auth/thirdweb", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, action: "generate" }),
+        });
+        
+        if (!payloadRes.ok) throw new Error("Failed to generate auth payload");
+        const { payload } = await payloadRes.json();
+        
+        // 2. Build a formatted message string from the payload
+        const messageToSign = buildSiweMessage(payload);
+        
+        // 3. User signs the message
+        if (!wallet) throw new Error("Wallet not connected");      
+        const signature = await wallet.signMessage(messageToSign);
+        
+        // 4. Send the signature back to the server for verification and session creation
+        const verifyRes = await fetch('/api/auth/thirdweb', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: "verify",
+            payload,
+            signature,
+            address,
+          }),
+        });
+        if (!verifyRes.ok) {
+          const errorData = await verifyRes.json();
+          throw new Error(errorData.error || "Failed to verify signature");
+        }
+        
+        const { session } = await verifyRes.json();
+        
+        if (session?.user) {
+          setSupabaseUserId(session.user.id);
+          
+          // Set Supabase session manually
+          if (session.access_token) {
+            // Set the session in Supabase client
+            await supabaseClient.auth.setSession({
+              access_token: session.access_token,
+              refresh_token: '',
+            });
+            
+            console.log("Supabase session set successfully");
+          }
+          
+          toast.success("Authenticated successfully", { id: "auth" });
+        } else {
+          throw new Error("Failed to get session");
+        }
+      } catch (error: any) {
+        console.error("Auth error:", error);
+        toast.error(`Authentication failed: ${error.message}`, { id: "auth" });
+      } finally {
+        setIsAuthenticating(false);
+      }
+    };
     
     getAddress();
   }, [wallet, status]);
-
-  /**
-   * Handles authentication with Supabase
-   * @param address - The wallet address to authenticate with
-   */
-  const handleAuth = async (address: string) => {
-    if (isAuthenticating) return; // prevent multiple calls
-    setIsAuthenticating(true);
-    toast.loading("Authenticating...", { id: "auth" });
-    
-    try {      
-      // 1. Generate login payload from your backend
-      const payloadRes = await fetch("/api/auth/thirdweb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, action: "generate" }),
-      });
-      
-      if (!payloadRes.ok) throw new Error("Failed to generate auth payload");
-      const { payload } = await payloadRes.json();
-      
-      // 2. Build a formatted message string from the payload
-      const messageToSign = buildSiweMessage(payload);
-      
-      // 3. User signs the message
-      if (!wallet) throw new Error("Wallet not connected");      
-      const signature = await wallet.signMessage(messageToSign);
-      
-      // 4. Send the signature back to the server for verification and session creation
-      const verifyRes = await fetch('/api/auth/thirdweb', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: "verify",
-          payload,
-          signature,
-          address,
-        }),
-      });
-      if (!verifyRes.ok) {
-        const errorData = await verifyRes.json();
-        throw new Error(errorData.error || "Failed to verify signature");
-      }
-      
-      const { session } = await verifyRes.json();
-      
-      if (session?.user) {
-        setSupabaseUserId(session.user.id);
-        
-        // Set Supabase session manually
-        if (session.access_token) {
-          // Set the session in Supabase client
-          await supabaseClient.auth.setSession({
-            access_token: session.access_token,
-            refresh_token: '',
-          });
-          
-          console.log("Supabase session set successfully");
-        }
-        
-        toast.success("Authenticated successfully", { id: "auth" });
-      } else {
-        throw new Error("Failed to get session");
-      }
-    } catch (error: any) {
-      console.error("Auth error:", error);
-      toast.error(`Authentication failed: ${error.message}`, { id: "auth" });
-    } finally {
-      setIsAuthenticating(false);
-    }
-  };
 
   const isConnected = status === "connected";
 

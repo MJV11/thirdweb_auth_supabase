@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 import React, { useEffect, useState } from "react";
-import { useActiveAccount, MediaRenderer } from "thirdweb/react";
+import { useWallet, MediaRenderer, ThirdwebProvider } from "@thirdweb-dev/react";
 import NFTGrid, { NFTGridLoading } from "@/components/NFT/NFTGrid";
 import { NFT as NFTType } from "thirdweb";
 import { tokensOfOwner } from "thirdweb/extensions/erc721";
@@ -11,22 +11,26 @@ import { NFT_COLLECTION } from "@/const/contracts";
 import toast from "react-hot-toast";
 import toastStyle from "@/util/toastConfig";
 import { Cross1Icon } from "@radix-ui/react-icons";
+import { Base } from "@thirdweb-dev/chains";
 
-export default function Sell() {
+function SellContent() {
 	const [loading, setLoading] = useState(false);
 	const [ownedTokenIds, setOwnedTokenIds] = useState<readonly bigint[]>([]);
 	const [selectedNft, setSelectedNft] = useState<NFTType>();
 
-	const account = useActiveAccount();
+	const wallet = useWallet();
 	useEffect(() => {
-		if (account) {
-			setLoading(true);
-			tokensOfOwner({
-				contract: NFT_COLLECTION,
-				owner: account.address,
-			})
-				.then(setOwnedTokenIds)
-				.catch((err) => {
+		const fetchNFTs = async () => {
+			if (wallet) {
+				try {
+					setLoading(true);
+					const address = await wallet.getAddress();
+					const tokens = await tokensOfOwner({
+						contract: NFT_COLLECTION,
+						owner: address,
+					});
+					setOwnedTokenIds(tokens);
+				} catch (err) {
 					toast.error(
 						"Something went wrong while fetching your NFTs!",
 						{
@@ -35,12 +39,14 @@ export default function Sell() {
 						}
 					);
 					console.log(err);
-				})
-				.finally(() => {
+				} finally {
 					setLoading(false);
-				});
-		}
-	}, [account]);
+				}
+			}
+		};
+
+		fetchNFTs();
+	}, [wallet]);
 
 	return (
 		<div>
@@ -59,7 +65,7 @@ export default function Sell() {
 									setSelectedNft(nft);
 								}}
 								emptyText={
-									!account
+									!wallet
 										? "Connect your wallet to list your NFTs!"
 										: "Looks like you don't own any NFTs in this collection. Head to the buy page to buy some!"
 								}
@@ -71,7 +77,6 @@ export default function Sell() {
 						<div className="flex flex-col w-full">
 							<div className="relative">
 								<MediaRenderer
-									client={client}
 									src={selectedNft.metadata.image}
 									className="rounded-lg !w-full !h-auto bg-white/[.04]"
 								/>
@@ -106,5 +111,16 @@ export default function Sell() {
 				)}
 			</div>
 		</div>
+	);
+}
+
+export default function Sell() {
+	return (
+		<ThirdwebProvider 
+			activeChain={Base}
+			clientId={process.env.NEXT_PUBLIC_TEMPLATE_CLIENT_ID}
+		>
+			<SellContent />
+		</ThirdwebProvider>
 	);
 }
